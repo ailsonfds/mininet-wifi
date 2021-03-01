@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e
+
+source /etc/default/openvswitch-switch
+
+rm -f /etc/openvswitch/.conf.db.~lock~ /etc/openvswitch/.conf.db
+
+/usr/share/openvswitch/scripts/ovs-ctl --no-ovs-vswitchd --no-monitor --system-id=random start $OVS_CTL_OPTS
+
+/usr/share/openvswitch/scripts/ovs-ctl --no-ovsdb-server --no-monitor --system-id=random start $OVS_CTL_OPTS
+
+/bin/bash
+
