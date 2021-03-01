@@ -10,8 +10,11 @@ set -e
 # Fail on unset var usage
 set -o nounset
 
+# Fail on non sudo
+[ $(whoami) == "root" ] || { sudo "$0" "$@"; exit $?; }
+
 # Get directory containing mininet folder
-MININET_DIR="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd -P )"
+MININET_DIR="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )/../.." && (pwd -P | sed 's; ;\\ ;g') )"
 
 # Set up build directory, which by default is the working directory
 #  unless the working directory is a subdirectory of mininet,
@@ -35,10 +38,10 @@ if [ "$ARCH" = "i686" ]; then ARCH="i386"; fi
 test -e /etc/debian_version && DIST="Debian"
 grep Ubuntu /etc/lsb-release &> /dev/null && DIST="Ubuntu"
 if [ "$DIST" = "Ubuntu" ] || [ "$DIST" = "Debian" ]; then
-    install='sudo apt-get -y install'
-    remove='sudo apt-get -y remove'
-    pkginst='sudo dpkg -i'
-    update='sudo apt-get'
+    install='apt-get -y install'
+    remove='apt-get -y remove'
+    pkginst='dpkg -i'
+    update='apt-get'
     # Prereqs for this script
     if ! which lsb_release &> /dev/null; then
         $install lsb-release
@@ -46,10 +49,10 @@ if [ "$DIST" = "Ubuntu" ] || [ "$DIST" = "Debian" ]; then
 fi
 test -e /etc/fedora-release && DIST="Fedora"
 if [ "$DIST" = "Fedora" ]; then
-    install='sudo yum -y install'
-    remove='sudo yum -y erase'
-    pkginst='sudo rpm -ivh'
-    update='sudo yum'
+    install='yum -y install'
+    remove='yum -y erase'
+    pkginst='rpm -ivh'
+    update='yum'
     # Prereqs for this script
     if ! which lsb_release &> /dev/null; then
         $install redhat-lsb-core
@@ -105,6 +108,8 @@ if [ "$PYTHON_VERSION" == unknown ]; then
 fi
 echo "Detected Python (${PYTHON}) version ${PYTHON_VERSION}"
 
+# Install git
+$install git
 
 DRIVERS_DIR=/lib/modules/${KERNEL_NAME}/kernel/drivers/net
 
@@ -137,14 +142,14 @@ function mn_deps {
                  ${PYPKG}-setuptools ${PYPKG}-pexpect ${PYPKG}-tk
 
         if [ "$PYTHON_VERSION" == 3 ]; then
-            sudo pip3 install --upgrade pip
-            sudo pip3 install --upgrade pyflakes
-            sudo pip3 install --upgrade pylint
+            pip3 install --upgrade pip
+            pip3 install --upgrade pyflakes
+            pip3 install --upgrade pylint
         else
-            sudo pip install --upgrade pip
-            sudo pip install --upgrade pyflakes
-            sudo pip install --upgrade pylint
-            sudo pip install matplotlib==2.1.1 --ignore-installed six
+            pip install --upgrade pip
+            pip install --upgrade pyflakes
+            pip install --upgrade pylint
+            pip install matplotlib==2.1.1 --ignore-installed six
         fi
 
         $install iproute2 || $install iproute
@@ -158,13 +163,13 @@ function mn_deps {
       rm -r mininet
     fi
 
-    sudo git clone --depth=1 https://github.com/mininet/mininet.git
+    git clone --depth=1 https://github.com/mininet/mininet.git
     pushd $MININET_DIR/mininet-wifi/mininet
-    sudo PYTHON=${PYTHON} make install
+    PYTHON=${PYTHON} make install
     popd
     echo "Installing Mininet-wifi core"
     pushd $MININET_DIR/mininet-wifi
-    sudo PYTHON=${PYTHON} make install
+    PYTHON=${PYTHON} make install
     popd
 }
 
@@ -182,11 +187,11 @@ function p4_deps {
     if [ "$DIST" = "Ubuntu" ] && [ "$RELEASE" = "20.04" ]; then
         git reset --hard 1fa500a
         patch -p0 < $MININET_DIR/mininet-wifi/util/p4-patches/p4-guide-v3-without-mininet.patch
-        sudo ./bin/install-p4dev-v3.sh |& tee log.txt
+        ./bin/install-p4dev-v3.sh |& tee log.txt
     else
         git reset --hard ef0f4e1
         patch -p0 < $MININET_DIR/mininet-wifi/util/p4-patches/p4-guide-without-mininet.patch
-        sudo ./bin/install-p4dev-v2.sh |& tee log.txt
+        ./bin/install-p4dev-v2.sh |& tee log.txt
     fi
 }
 
@@ -198,14 +203,14 @@ function wifi_deps {
              libdbus-1-dev ${PYPKG}-psutil ${PYPKG}-pip
 
     if [ "$DIST" = "Ubuntu" ] && [ "$RELEASE" = "14.04" ]; then
-        sudo pip install --upgrade pip
-        sudo pip install matplotlib==2.1.1 --ignore-installed six
+        pip install --upgrade pip
+        pip install matplotlib==2.1.1 --ignore-installed six
     else
         if [ "$PYTHON_VERSION" == 3 ]; then
             $install python3-matplotlib
         else
-            sudo pip install --upgrade pip
-            sudo pip install matplotlib==2.1.1 --ignore-installed six
+            pip install --upgrade pip
+            pip install matplotlib==2.1.1 --ignore-installed six
         fi
         $install net-tools
     fi
@@ -221,10 +226,10 @@ function wifi_deps {
     fi
     pushd $MININET_DIR/mininet-wifi/hostap/hostapd
     cp defconfig .config
-    sudo make && make install
+    make && make install
     pushd $MININET_DIR/mininet-wifi/hostap/wpa_supplicant
     cp defconfig .config
-    sudo make && make install
+    make && make install
     pushd $MININET_DIR/mininet-wifi/
     if [ -d iw ]; then
       echo "Removing iw..."
@@ -232,7 +237,7 @@ function wifi_deps {
     fi
     git clone --depth=1 https://git.kernel.org/pub/scm/linux/kernel/git/jberg/iw.git
     pushd $MININET_DIR/mininet-wifi/iw
-    sudo make && make install
+    make && make install
     cd $BUILD_DIR
     if [ -d mac80211_hwsim_mgmt ]; then
       echo "Removing mac80211_hwsim_mgmt..."
@@ -240,7 +245,7 @@ function wifi_deps {
     fi
     git clone --depth=1 https://github.com/ramonfontes/mac80211_hwsim_mgmt.git
     pushd $BUILD_DIR/mac80211_hwsim_mgmt
-    sudo make install
+    make install
 }
 
 function babeld {
@@ -254,7 +259,7 @@ function babeld {
     git clone --depth=1 https://github.com/jech/babeld
     cd $BUILD_DIR/mininet-wifi/babeld
     make
-    sudo make install
+    make install
 }
 
 function olsrd {
@@ -269,7 +274,7 @@ function olsrd {
     git clone --depth=1 https://github.com/OLSR/olsrd
     cd $BUILD_DIR/mininet-wifi/olsrd
     make
-    sudo make install
+    make install
 }
 
 function olsrdv2 {
@@ -287,7 +292,7 @@ function olsrdv2 {
     cd build
     cmake ..
     make
-    sudo make install
+    make install
 
     cd $BUILD_DIR/mininet-wifi
     if [ -d ubus ]; then
@@ -300,7 +305,7 @@ function olsrdv2 {
     cd build
     cmake ..
     make
-    sudo make install
+    make install
 
     cd $BUILD_DIR/mininet-wifi
     if [ -d uci ]; then
@@ -313,7 +318,7 @@ function olsrdv2 {
     cd build
     cmake ..
     make
-    sudo make install
+    make install
 
     cd $BUILD_DIR/mininet-wifi
     if [ -d OONF ]; then
@@ -324,7 +329,7 @@ function olsrdv2 {
     cd $BUILD_DIR/mininet-wifi/OONF/build
     cmake ..
     make
-    sudo make install
+    make install
 }
 
 function batman {
@@ -338,7 +343,7 @@ function batman {
     git clone https://github.com/open-mesh-mirror/batmand --depth=1
     cd batmand
     make
-    sudo make install
+    make install
 
     echo "Installing batman-adv..."
     cd $BUILD_DIR/mininet-wifi
@@ -349,7 +354,7 @@ function batman {
     git clone https://github.com/open-mesh-mirror/batman-adv --depth=1
     cd batman-adv
     make
-    sudo make install
+    make install
 
     echo "Installing batctl..."
     cd $BUILD_DIR/mininet-wifi
@@ -360,7 +365,7 @@ function batman {
     git clone https://github.com/open-mesh-mirror/batctl --depth=1
     cd batctl
     make
-    sudo make install
+    make install
 }
 
 
@@ -396,7 +401,7 @@ function of {
     ./boot.sh
     ./configure
     make
-    sudo make install
+    make install
     cd $BUILD_DIR
 }
 
@@ -426,16 +431,16 @@ function of13 {
     make
 
     cd $BUILD_DIR/
-    sudo cp ${NBEEDIR}/bin/libn*.so /usr/local/lib
-    sudo ldconfig
-    sudo cp -R ${NBEEDIR}/include/ /usr/
+    cp ${NBEEDIR}/bin/libn*.so /usr/local/lib
+    ldconfig
+    cp -R ${NBEEDIR}/include/ /usr/
 
     # Resume the install:
     cd $BUILD_DIR/ofsoftswitch13
     ./boot.sh
     ./configure
     make
-    sudo make install
+    make install
     cd $BUILD_DIR
 }
 
@@ -478,11 +483,11 @@ function ovs {
         # Switch can run on its own, but
         # Mininet should control the controller
         # This appears to only be an issue on Ubuntu/Debian
-        if sudo service $OVSC stop; then
+        if service $OVSC stop; then
             echo "Stopped running controller"
         fi
         if [ -e /etc/init.d/$OVSC ]; then
-            sudo update-rc.d $OVSC disable
+            update-rc.d $OVSC disable
         fi
     fi
 
@@ -491,8 +496,8 @@ function ovs {
     # python2 will replace python3
     # that's why we try to revert python to python3
     if [ "$PYTHON_VERSION" == 3 ] && version_ge "$RELEASE" 20.04; then
-        sudo rm /usr/bin/python
-        sudo ln -s /usr/bin/python3 /usr/bin/python
+        rm /usr/bin/python
+        ln -s /usr/bin/python3 /usr/bin/python
     fi
 }
 
@@ -509,9 +514,9 @@ function remove_ovs {
         for s in $scripts; do
             s=$(basename $s)
             echo SCRIPT $s
-            sudo service $s stop
-            sudo rm -f /etc/init.d/$s
-            sudo update-rc.d -f $s remove
+            service $s stop
+            rm -f /etc/init.d/$s
+            update-rc.d -f $s remove
         done
     fi
     echo "Done removing OVS"
@@ -545,7 +550,7 @@ function cbench {
     sh boot.sh
     ./configure --with-openflow-src-dir=$BUILD_DIR/openflow
     make
-    sudo make install || true # make install fails; force past this
+    make install || true # make install fails; force past this
 }
 
 # Script to copy built OVS kernel module to where modprobe will
@@ -561,8 +566,8 @@ function modprobe {
     if [ -z "$OVS_KMODS" ]; then
       echo "OVS_KMODS not set. Aborting."
     else
-      sudo cp $OVS_KMODS $DRIVERS_DIR
-      sudo depmod -a ${KERNEL_NAME}
+      cp $OVS_KMODS $DRIVERS_DIR
+      depmod -a ${KERNEL_NAME}
     fi
     set -o nounset
 }
@@ -578,7 +583,7 @@ function wmediumd {
     $install git make libevent-dev libconfig-dev libnl-3-dev libnl-genl-3-dev
     git clone --depth=1 -b mininet-wifi https://github.com/ramonfontes/wmediumd.git
     pushd $BUILD_DIR/wmediumd
-    sudo make install
+    make install
     popd
 }
 
@@ -593,10 +598,10 @@ function wpan_tools {
     fi
     git clone --depth=1 https://github.com/linux-wpan/wpan-tools
     pushd $BUILD_DIR/wpan-tools
-    sudo ./autogen.sh
-    sudo ./configure
-    sudo make
-    sudo make install
+    ./autogen.sh
+    ./configure
+    make
+    make install
     popd
 }
 
@@ -633,20 +638,20 @@ function all {
 # Restore disk space and remove sensitive files before shipping a VM.
 function vm_clean {
     echo "Cleaning VM..."
-    sudo apt-get clean
-    sudo apt-get autoremove
-    sudo rm -rf /tmp/*
-    sudo rm -rf openvswitch*.tar.gz
+    apt-get clean
+    apt-get autoremove
+    rm -rf /tmp/*
+    rm -rf openvswitch*.tar.gz
 
     # Remove sensistive files
     history -c  # note this won't work if you have multiple bash sessions
     rm -f ~/.bash_history  # need to clear in memory and remove on disk
     rm -f ~/.ssh/id_rsa* ~/.ssh/known_hosts
-    sudo rm -f ~/.ssh/authorized_keys*
+    rm -f ~/.ssh/authorized_keys*
 
     # Remove Mininet files
-    #sudo rm -f /lib/modules/python2.5/site-packages/*
-    #sudo rm -f /usr/bin/mnexec
+    #rm -f /lib/modules/python2.5/site-packages/*
+    #rm -f /usr/bin/mnexec
 
     # Clear optional dev script for SSH keychain load on boot
     rm -f ~/.bash_profile
@@ -658,8 +663,8 @@ function vm_clean {
     # Note: you can shrink the .vmdk in vmware using
     # vmware-vdiskmanager -k *.vmdk
     echo "Zeroing out disk blocks for efficient compaction..."
-    time sudo dd if=/dev/zero of=/tmp/zero bs=1M || true
-    sync ; sleep 1 ; sync ; sudo rm -f /tmp/zero
+    time dd if=/dev/zero of=/tmp/zero bs=1M || true
+    sync ; sleep 1 ; sync ; rm -f /tmp/zero
 
 }
 
